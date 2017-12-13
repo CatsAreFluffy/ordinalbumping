@@ -1,0 +1,339 @@
+<html><head>
+<title>Ordinal Bumping</title>
+<!--
+An incremntal that's like Prestige, but with normal buying rather than prestiging and ordinals.
+Each ordinal's amount is multiplied to make the income.
+Zero costs base currency.
+Successor ordinals cost their predecessor.
+Limit ordinals cost the elements of their fundamental sequence (one at a time)
+Uncountable ordinals cost milestone elements of their fundamental sequence and give exponent or something
+-->
+<script>
+var money=0
+var ordinals={"[]":0} //represented using CNF stuff, [] is 0 and [a,b] is w^a+b
+var costs={"[]":0}
+var unlocked=["[]"]
+var reprs={"0":[],"1":[[]],"3":[[],[[],[[]]]],"w":[[[]]],"w+2":[[[]],[[],[[]]]],"w+w":[[[]],[[[]]]],"w^2":[[[],[[]]]]}
+var costscaling=[1,1]
+var easyness=[2,1]
+var upgrades={costscaling:costscaling,easyness:easyness}
+var uncountables=0
+function update(set,get){
+	document.getElementById(set).innerHTML=get
+}
+function buy(x){
+	console.log(x)
+	/*create(add(x,[[]]))
+	create(nextlimit(x))
+	return*/
+	if(cf(x)==0){
+		console.log("buy 0",money,costs[encode(x)])
+		if(money>=costs[encode(x)]){
+			if(ordinals[encode(x)]==1&&!unlocked.find(a=>a=="[[]]")){
+				create([[]])
+			}
+			money-=costs[encode(x)]
+			ordinals[encode(x)]++
+			costs[encode(x)]=computecost([],ordinals[encode(x)])
+			update("moneybox",money)
+			update("cost_"+encode(x),costs[encode(x)])
+			update("amount_"+encode(x),ordinals[encode(x)])
+			income()
+		}
+	}else if(cf(x)==1){
+		console.log("buy succ",money,costs[encode(x)])
+		var y=seq(x,5318008)
+		if(ordinals[encode(y)]>=costs[encode(x)]){
+			if(ordinals[encode(x)]==1&&!unlocked.find(a=>a==encode(add(x,[[]])))){
+				create(add(x,[[]]))
+				create(nextlimit(x))
+			}
+			ordinals[encode(y)]-=costs[encode(x)]
+			ordinals[encode(x)]++
+			costs[encode(x)]=computecost(x,ordinals[encode(x)])
+			costs[encode(y)]=computecost(y,ordinals[encode(y)])
+			update("cost_"+encode(x),costs[encode(x)])
+			update("amount_"+encode(x),ordinals[encode(x)])
+			if(cf(y)=="w"){
+				update("cost0_"+encode(y),costs[encode(y)][0])
+				update("cost_"+encode(y),formato(seq(y,costs[encode(y)][1])))
+			}else{
+				update("cost_"+encode(y),costs[encode(y)])
+			}
+			update("amount_"+encode(y),ordinals[encode(y)])
+			income()
+		}
+	}else if(cf(x)=="w"){
+		console.log("buy limit",money,costs[encode(x)])
+		var y=seq(x,costs[encode(x)][1])
+		if(ordinals[encode(y)]>=costs[encode(x)][0]){
+			if(ordinals[encode(x)]==1&&!unlocked.find(a=>a==encode(add(x,[[]])))){
+				create(add(x,[[]]))
+				create(nextlimit(x))
+			}
+			ordinals[encode(y)]-=costs[encode(x)][0]
+			ordinals[encode(x)]++
+			costs[encode(x)]=computecost(x,ordinals[encode(x)])
+			costs[encode(y)]=computecost(y,ordinals[encode(y)])
+			update("cost0_"+encode(x),costs[encode(x)][0])
+			update("cost_"+encode(x),formato(seq(x,costs[encode(x)][1])))
+			update("amount_"+encode(x),ordinals[encode(x)])
+			if(cf(y)=="w"){
+				update("cost0_"+encode(y),costs[encode(y)][0])
+				update("cost_"+encode(y),formato(seq(y,costs[encode(y)][1])))
+			}else{
+				update("cost_"+encode(y),costs[encode(y)])
+			}
+			update("amount_"+encode(y),ordinals[encode(y)])
+			income()
+		}
+	}
+}
+function computecost(x,n){
+	if(cf(x)==0){
+		//return Math.pow(2,n)
+		return Math.floor(Math.max(Math.pow(n,2),n))
+		//return n
+	}else if(cf(x)==1){
+		//return Math.pow(2,n+1)
+		if(n==0){
+			return 1
+		}
+		return Math.floor(Math.max(Math.pow(n+1,2)/costscaling[1],n+2))
+	}else if(cf(x)=="w"){
+		return [2+n%easyness[1],Math.floor(n/easyness[1])+2]
+	}
+}
+function step(){
+	if(ordinals["[]"]>0){
+		money+=income()
+		update("moneybox",money)
+	}
+}
+function income(){
+	running=1
+	for(var i=0;i<unlocked.length;i++){
+		if(ordinals[unlocked[i]]>0){
+			running*=ordinals[unlocked[i]]
+		}
+	}
+	update("incomebox",running)
+    return running
+}
+function prestige(x,r){
+	if(ordinals[encode(x)]>1){
+		uncountables+=r
+		update("uncountablebox",uncountables)
+		for(var i=0;i<unlocked.length;i++){
+			ordinals[unlocked[i]]=1
+			costs[unlocked[i]]=computecost(eval(unlocked[i]),1) //todo: replace eval with actual array parser
+		}
+		var z=document.getElementsByClassName("hideonprestige2")
+		for(var i=0;i<z.length;){ //no increment because list uodates
+			z[i].parentNode.removeChild(z[i])
+		}
+		var z=document.getElementsByClassName("hideonprestige")
+		for(var i=0;i<z.length;){ //ditto
+			z[i].parentNode.removeChild(z[i])
+		}
+		unlocked=["[]"]
+		update("cost_[]",0)
+		update("amount_[]",0)
+	}
+}
+function upgrade(x){
+	if(uncountables>=upgrades[x][0]){
+		uncountables-=upgrades[x][0]
+		upgrades[x][0]*=2
+		upgrades[x][1]++
+		update("ucost_"+x,upgrades[x][0])
+		update("uncountablebox",uncountables)
+	}
+}
+function create(x){
+	if(!x){
+		return
+	}
+	var node=document.createElement("button")
+	node.onclick=function(){buy(x)}
+	node.className="hideonprestige"
+	node.id="button_"+encode(x)
+	if(cf(x)==1){
+		node.innerHTML=formato(x)+'<br>Cost: <span id="cost_'+encode(x)+'">'+computecost(x,1)+'</span>x '+formato(seq(x,666))+'<br>Amount: <span id="amount_'+encode(x)+'">1</span>'
+		costs[encode(x)]=computecost(x,1)
+	}else{
+		node.innerHTML=formato(x)+'<br>Cost: <span id="cost0_'+encode(x)+'">'+computecost(x,1)[0]+'</span>x <span id="cost_'+encode(x)+'">'+formato(seq(x,computecost(x,1)[1]))+'</span><br>Amount: <span id="amount_'+encode(x)+'">1</span>'
+		costs[encode(x)]=computecost(x,1)
+	}
+	unlocked.push(encode(x))
+	ordinals[encode(x)]=1
+	if(!document.getElementById("row_"+encode(floorw(x)))){
+		createrow(floorw(x))
+	}
+	document.getElementById("row_"+encode(floorw(x))).appendChild(node)
+}
+function createrow(x){
+	var node=document.createElement("div")
+	node.id="row_"+encode(x)
+	node.className="hideonprestige2"
+	document.getElementById("rowbox").appendChild(node)
+}
+function nextlimit(x){
+	if(x.length==0){
+		return
+	}else if(x.length==1){
+		var t=nextlimit(x[0])
+		if(t){
+			return [t]
+		}
+	}else if(!cmp(x[0],x[1][0])&&x[1].length==1){
+		return [add(x[0],[[]])] //x*2
+	}else{
+		var t=nextlimit(x[1])
+		if(t&&cmp(seq(t,1),[x[0]])){ //block x*3s
+			return [x[0],t]
+		}
+	}
+}
+
+function cmp(x,y){
+	if(y.length==0){
+		if(x.length==0){
+			return 0
+		}else{
+			return -1
+		}
+	}else if(x.length==0){
+		return 1
+	}else if(cmp(x[0],y[0])){
+		return cmp(x[0],y[0])
+	}else if(x.length==1){
+		if(y.length==1){
+			return 0
+		}else{
+			return -1
+		}
+	}else if(y.length==1){
+		return 1
+	}else{
+		return cmp(x[1],y[1])
+	}
+}
+function cf(x){
+	if(x.length==0){
+		return 0 //zero
+	}else if(x.length==2&&x[1].length==0||x[0].length==0){
+		return 1 //successor
+	}else if(x.length==1){
+		return "w" //limit
+	}else{
+		return cf(x[1])
+	}
+	return "W" //uncountable, not possible yet
+}
+function seq(x,n){
+	if(x.length==2){
+		if(x[1].length==1&&x[1][0].length==0){
+			return [x[0]]
+		}
+		return [x[0],seq(x[1],n)]
+	}else if(cf(x)==0){
+		throw "what's wrong with you?"
+	}else if(cf(x[0])==0){
+		return []
+	}else if(cf(x[0])=="w"){
+		return [seq(x[0],n)]
+	}else if(n==0){
+		return []
+	}else if(n==1){
+		return [seq(x[0],4738.2312)]
+	}else{
+		return [seq(x[0],697.333),seq(x,n-1)]
+	}
+}
+function formato(x){
+	return formati(x)[0]
+}
+function formati(x){
+	//second values:
+	//0=addition (w+2)
+	//1=multiplication (e0*w)
+	//2=exponentiation (w^2)
+	//3=strong multiplication (w3)
+	//4=literal (232231)
+	//third values:
+	//0=two number sides (333)
+	//1=one number side (e1e0)
+	//2=no number sides (n0w)
+	if(x.length==0){
+		return ["0",4]
+	}else if(x.length==1){
+		if(x[0].length==0){
+			return ["1",4]
+		}else if(formato(x[0])=="1"){
+			return ["w",4]
+		}else if(formati(x[0])[1]>=2){
+			return ["w^"+formato(x[0]),2]
+		}
+		return ["w^("+formato(x[0])+")",2]
+	}else{
+		if(!isNaN(formato(x[1])*1)&&x[0].length==0){
+			return [formato(x[1])*1+1,4]
+		}
+		return [formato([x[0]])+"+"+formato(x[1]),0]
+	}
+}
+function parseo(x){
+	if(x.match(/\+/g)){
+		var t=x.split(/\+/)
+		//return [parse]
+	}
+}
+function encode(x){
+	var ret=""
+	for(var i=0;i<x.length;i++){
+		ret+=encode(x[i])+","
+	}
+	return "["+ret.slice(0,-1)+"]"
+}
+function add(x,y){
+	if(x.length==2){
+		return [x[0],add(x[1],y)]
+	}else if(x.length==1){
+		return [x[0],y]
+	}else{
+		return y
+	}
+}
+function floorw(x){
+	if(cf(x)==1){
+		return floorw(seq(x,717))
+	}else{
+		return x
+	}
+}
+</script>
+</head>
+<body>
+Money: <span id="moneybox">0</span><br>
+Income: <span id="incomebox">0</span>
+<div id="rowbox">
+<div id="row_[]">
+<button id="button_[]" onclick="buy([])">0<br>Cost: <span id="cost_[]">0</span> Money<br>Amount: <span id="amount_[]">0</span></button>
+</div>
+</div>
+<button onclick="step()">Tick</button><br><br>
+<span id="uncountablebox">0</span> Uncountables<br>
+Warning: The following buttons will reset all ordinals<br>
+<!--Prestiges:
+1U at 2
+2U at w
+5U at w2
+-->
+<div id="prestigebox"><button onclick="prestige([[],[[]]],1)">Cost: 2x 2<br>Reward: 1</button>
+<button onclick="prestige([[[]]],2)">Cost: 2x w<br>Reward: 2</button>
+<button onclick="prestige([[[]],[[[]]]],5)">Cost: 2x w+w<br>Reward: 5</button></div>
+<div id="upgradebox"><button id="upgrade_costscaling" onclick="upgrade('costscaling')">Reduce scaling of successor costs<br>Cost: <span id="ucost_costscaling">1</span>U</button>
+<button id="upgrade_easyness" onclick="upgrade('easyness')">Reduce scaling of limit costs<br>Cost: <span id="ucost_easyness">2</span>U</button>
+</body>
+</html>
